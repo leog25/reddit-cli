@@ -1,0 +1,48 @@
+name: Release from existing artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Workflow run ID to pull artifacts from"
+        required: true
+      tag:
+        description: "Release tag (e.g. v0.0.1)"
+        required: true
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          for dir in artifacts/*/; do
+            name="$(basename "$dir")"
+            file="$(ls "$dir")"
+            if [[ "$file" == *.exe ]]; then
+              cp "$dir/$file" "release/${name}.exe"
+            else
+              cp "$dir/$file" "release/${name}"
+            fi
+          done
+          ls -la release/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          files: release/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false

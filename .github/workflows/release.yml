@@ -1,0 +1,133 @@
+name: Release Binaries
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            os: ubuntu-22.04
+            artifact: reddit-linux-x64
+            filename: reddit
+            nuitka_extra: --include-module=jeepney
+          - target: windows-x64
+            os: windows-latest
+            artifact: reddit-windows-x64
+            filename: reddit.exe
+            nuitka_extra: --mingw64
+          - target: macos-arm64
+            os: macos-15
+            artifact: reddit-macos-arm64
+            filename: reddit
+            nuitka_extra: --python-flag=no_site
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e ".[binary]"
+          pip install "nuitka>=2.7.4" ordered-set zstandard
+
+      - name: Build with Nuitka
+        shell: bash
+        run: |
+          python -m nuitka \
+            --mode=onefile \
+            --output-dir=dist \
+            --output-filename=${{ matrix.filename }} \
+            --python-flag=no_site \
+            --include-module=browser_cookie3 \
+            --include-module=rookiepy \
+            --include-module=yaml \
+            --include-module=rich.panel \
+            --include-module=rich.table \
+            --include-module=rich.console \
+            --include-module=annotated_types \
+            --include-module=typing_extensions \
+            --include-module=typing_inspection \
+            --include-package=Cryptodome \
+            --include-package=pydantic \
+            --include-package=pydantic_core \
+            --include-package=typer \
+            --include-package=click \
+            --include-package=httpx \
+            --include-package=httpcore \
+            --include-package=rich \
+            --include-package=lz4 \
+            --nofollow-import-to=pytest \
+            --nofollow-import-to=ruff \
+            --nofollow-import-to=_pytest \
+            --lto=yes \
+            --assume-yes-for-downloads \
+            ${{ matrix.nuitka_extra }} \
+            src/reddit_cli/main.py
+
+      - name: Smoke test
+        shell: bash
+        run: ./dist/${{ matrix.filename }} --help
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.filename }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          for dir in artifacts/*/; do
+            name="$(basename "$dir")"
+            file="$(ls "$dir")"
+            if [[ "$file" == *.exe ]]; then
+              cp "$dir/$file" "release/${name}.exe"
+            else
+              cp "$dir/$file" "release/${name}"
+            fi
+          done
+          ls -la release/
+
+      - name: Create GitHub Release (private repo)
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+
+      - name: Publish to public releases repo
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_PAT }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          gh release create "$TAG" release/* \
+            --repo leog25/reddit-cli-releases \
+            --title "$TAG" \
+            --notes "Release $TAG — install via: \`curl -fsSL https://raw.githubusercontent.com/leog25/reddit-cli-releases/main/install.sh | bash\`"
