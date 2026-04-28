@@ -5,31 +5,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-# Install (uv venv with Python 3.12)
-uv venv --python 3.12
+# Install (Python 3.10+; uv picks a compatible interpreter)
+uv venv
 uv pip install -e ".[dev]"
 
 # Run all tests
-.venv/Scripts/python -m pytest tests/ -v
+uv run pytest tests/ -v
 
 # Run a single test file
-.venv/Scripts/python -m pytest tests/test_client.py -v
+uv run pytest tests/test_client.py -v
 
 # Run a specific test
-.venv/Scripts/python -m pytest tests/test_commands.py::TestSubHot::test_returns_json -v
+uv run pytest tests/test_commands.py::TestSubHot::test_returns_json -v
 
 # Lint (check)
-.venv/Scripts/ruff check src/ tests/
+uv run ruff check src/ tests/
 
 # Lint (auto-fix)
-.venv/Scripts/ruff check --fix src/ tests/
+uv run ruff check --fix src/ tests/
 
-# Run the CLI (via venv)
-.venv/Scripts/reddit sub hot python --limit 5
-.venv/Scripts/reddit --help
+# Run the CLI
+uv run reddit sub hot python --limit 5
+uv run reddit --help
 ```
 
-**Always lint before committing.** Run `ruff check src/ tests/` and fix any errors before creating a commit.
+If you don't have `uv`, you can use the venv directly: `.venv/bin/python -m pytest …` on macOS/Linux, `.venv/Scripts/python -m pytest …` on Windows.
+
+**Always lint before committing.** Run `uv run ruff check src/ tests/` and fix any errors before creating a commit.
 
 Set `PYTHONIOENCODING=utf-8` when piping output on Windows.
 
@@ -82,3 +84,10 @@ TDD approach. Each layer has its own test file with fixtures from real Reddit AP
 - `resolve_fullname_from_index()` consolidates bare ID, `t3_` prefix, and numeric index resolution.
 - `save_index()` called after every listing command for `reddit post show <N>` navigation.
 - All commands support `--json`, `--yaml`, `--compact` flags.
+
+## Release Pipeline
+
+- Pushing a tag matching `v*` triggers `.github/workflows/release.yml`. It builds Nuitka one-file binaries on linux-x64 (ubuntu-22.04), windows-x64 (windows-latest), and macos-arm64 (macos-15), then publishes a GitHub release on **both** `leog25/reddit-cli` (default `GITHUB_TOKEN`) and `leog25/reddit-cli-releases` (cross-repo `RELEASES_PAT` secret).
+- The companion repo `leog25/reddit-cli-releases` is the canonical install source — `install.sh` and `install.ps1` (mirrored at the root of this repo and at the root of the releases repo) hardcode `leog25/reddit-cli-releases` and default to resolving `/releases/latest` via the GitHub API.
+- `.github/workflows/release-only.yml` is a manual `workflow_dispatch` fallback that re-publishes from a previous run's artifacts to the source repo only — useful when a tag ran but the cross-repo upload failed.
+- Release-related files at the repo root: `build.py` (Nuitka driver), `install.sh`, `install.ps1`. `SKILL.md` is a Claude Code skill manifest pointing at the public install URLs.

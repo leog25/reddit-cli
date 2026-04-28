@@ -16,10 +16,10 @@ curl -fsSL https://raw.githubusercontent.com/leog25/reddit-cli-releases/main/ins
 irm https://raw.githubusercontent.com/leog25/reddit-cli-releases/main/install.ps1 | iex
 ```
 
-**From source**
+**From source** (Python 3.10+)
 ```bash
-uv venv --python 3.12
-uv pip install -e .
+uv venv
+uv pip install -e .            # add ".[dev]" for tests + linting
 ```
 
 ## Quick start
@@ -51,7 +51,7 @@ All listing and read commands accept `--json`, `--yaml`, and `--compact`. The en
 {"ok": false, "schema_version": "1", "error": {"code": "not_found", "message": "..."}}
 ```
 
-Error codes: `not_found`, `rate_limited`, `forbidden`, `not_authenticated`, `api_error`, `script_error`, `timeout`, `file_not_found`.
+Error codes: `not_found`, `rate_limited`, `forbidden`, `not_authenticated`, `api_error`, `script_error`, `timeout`, `file_not_found`, `unknown_error`.
 
 In a terminal you get Rich tables. When piped, you get the JSON envelope.
 
